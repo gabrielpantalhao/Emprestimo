@@ -1,27 +1,17 @@
 from shiny import App, ui, render, reactive
 import pandas as pd
-import math
-import matplotlib.pyplot as plt
-from bcb import sgs
-import io
+from shiny.types import FileInfo
+import plotly.graph_objs as go
+from shinywidgets import output_widget, render_widget
+import shinywidgets
 
-# Função para buscar taxa de juros do BCB (código 20749: empréstimo pessoal não consignado)
+# Fontes alternativas (mocks)
 def obter_taxa_juros_bcb():
-    try:
-        taxa = sgs.get({'TaxaJuros': 20749}, last=1)
-        return taxa['TaxaJuros'].iloc[0] / 12
-    except:
-        return 2.0
+    return 2.0  # mock para testes offline
 
-# Função para buscar IPCA (código 433: IPCA variação mensal)
 def obter_ipca_bcb():
-    try:
-        ipca = sgs.get({'IPCA': 433}, last=12)
-        return ipca['IPCA'].mean() / 100
-    except:
-        return 0.004
+    return 0.004  # mock para testes offline
 
-# Sugestão de parcelas baseado na renda
 def sugerir_parcelas(P, i, renda, percent_renda):
     if renda <= 0 or percent_renda <= 0:
         return 1
@@ -38,19 +28,15 @@ def sugerir_parcelas(P, i, renda, percent_renda):
             break
     return n_sugerido
 
-# Cálculo de quitação antecipada
 def calcular_quitacao_antecipada(P, i, n, meses_restantes):
     if meses_restantes >= n:
         return P
     if i == 0:
         return P * (meses_restantes / n)
-    else:
-        parcela = P * (i * (1 + i)**n) / ((1 + i)**n - 1)
-        saldo = parcela * ((1 - (1 + i)**-(meses_restantes)) / i)
-        return round(saldo, 2)
+    parcela = P * (i * (1 + i)**n) / ((1 + i)**n - 1)
+    saldo = parcela * ((1 - (1 + i)**-(meses_restantes)) / i)
+    return round(saldo, 2)
 
-
-# Comparação de prazos
 def comparar_custos(P, i, prazos=[6, 12, 24, 36]):
     dados = []
     for n in prazos:
@@ -63,15 +49,44 @@ def comparar_custos(P, i, prazos=[6, 12, 24, 36]):
         dados.append({"Parcelas": n, "Parcela Mensal (R$)": round(parcela, 2), "Total Pago (R$)": round(total, 2)})
     return pd.DataFrame(dados)
 
-# Interface do usuário com CSS
 app_ui = ui.page_fluid(
     ui.include_css("style.css"),
+
+    # Adiciona FontAwesome CDN para usar os ícones
+    ui.tags.head(
+        ui.tags.link(
+            rel="stylesheet",
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        )
+    ),
+
+    ui.tags.script("""
+        function toggleTheme() {
+            document.body.classList.toggle('dark');
+            document.body.classList.toggle('light');
+        }
+    """),
+    ui.tags.script("""
+        document.addEventListener("DOMContentLoaded", function() {
+            document.body.classList.add("dark");
+        });
+    """),
+
+    # Logo com ícone FontAwesome dentro de div .logo
+    ui.div(
+        ui.tags.i(class_="fas fa-money-bill-wave fa-3x", title="Logo Empréstimo"),
+    class_="logo"
+),
+
+
+
     ui.h2("Simulador de Empréstimo com Parcelas", class_="titulo"),
+    ui.tags.button("Alternar Tema", class_="toggle-theme", onclick="toggleTheme()"),
 
     ui.div(
         ui.input_numeric("valor", "Valor do empréstimo (R$)", 1000, min=1),
         ui.input_select("fonte_juros", "Fonte da taxa de juros", choices=["Manual", "Banco Central"]),
-        ui.output_ui("juros_ui"),  # Container dinâmico para input ou texto da taxa de juros
+        ui.output_ui("juros_ui"),
         ui.input_numeric("renda", "Renda mensal (R$)", 3000, min=1),
         ui.input_numeric("percent_renda", "Percentual máximo para parcela (%)", 30, min=1, max=100),
         ui.input_numeric("parcelas", "Número de parcelas (meses)", 12, min=1, max=84),
@@ -80,50 +95,46 @@ app_ui = ui.page_fluid(
     ),
 
     ui.hr(),
-    ui.output_text("sugestao_parcelas"),
-    ui.output_text("total_pago"),
-    ui.output_text("valor_quitacao"),
+
+    ui.div(ui.output_text("sugestao_parcelas"), class_="resultado"),
+    ui.div(ui.output_text("total_pago"), class_="resultado"),
+    ui.div(ui.output_text("valor_quitacao"), class_="resultado"),
+
     ui.hr(),
 
     ui.div(
         ui.output_table("tabela_parcelas"),
-        ui.output_plot("grafico_divida"),
+        output_widget("grafico_divida"),
         class_="output-container"
     ),
 
     ui.div(
         ui.output_table("tabela_comparacao"),
-        ui.output_plot("grafico_comparacao"),
+        output_widget("grafico_comparacao"),
         class_="output-container"
     ),
 
-    ui.download_button("download_csv", "Baixar Tabela como CSV", class_="btn-download")
+    ui.div(
+        ui.download_button("download_csv", ui.HTML('<i class="fas fa-file-csv"></i> Baixar Tabela como CSV'), class_="btn-download")
+    )
 )
 
-# Servidor
 def server(input, output, session):
     @output
     @render.ui
     def juros_ui():
         fonte = input.fonte_juros()
         if fonte == "Manual":
-            # Input numérico para taxa de juros mensal
             return ui.input_numeric("juros", "Taxa de juros mensal (%)", value=obter_taxa_juros_bcb(), min=0, step=0.1)
         else:
-            # Texto mostrando taxa puxada da API
             taxa_bcb = obter_taxa_juros_bcb()
-            return ui.div(
-                ui.tags.strong(f"Taxa de juros mensal obtida do Banco Central: {taxa_bcb:.2f}%")
-            )
+            return ui.div(ui.tags.strong(f"Taxa de juros mensal obtida do Banco Central: {taxa_bcb:.2f}%"))
 
     @reactive.Calc
     def tabela():
         P = input.valor()
-        # Usar juros conforme escolha do usuário
         if input.fonte_juros() == "Manual":
-            juros_percent = input.juros()
-            if juros_percent is None:
-                juros_percent = obter_taxa_juros_bcb()
+            juros_percent = input.juros() or obter_taxa_juros_bcb()
         else:
             juros_percent = obter_taxa_juros_bcb()
         n = input.parcelas()
@@ -179,12 +190,7 @@ def server(input, output, session):
     @render.text
     def sugestao_parcelas():
         P = input.valor()
-        if input.fonte_juros() == "Manual":
-            juros_percent = input.juros()
-            if juros_percent is None:
-                juros_percent = obter_taxa_juros_bcb()
-        else:
-            juros_percent = obter_taxa_juros_bcb()
+        juros_percent = input.juros() if input.fonte_juros() == "Manual" else obter_taxa_juros_bcb()
         renda = input.renda()
         percent_renda = input.percent_renda()
         n_sugerido = sugerir_parcelas(P, juros_percent / 100, renda, percent_renda)
@@ -194,12 +200,7 @@ def server(input, output, session):
     @render.text
     def valor_quitacao():
         P = input.valor()
-        if input.fonte_juros() == "Manual":
-            juros_percent = input.juros()
-            if juros_percent is None:
-                juros_percent = obter_taxa_juros_bcb()
-        else:
-            juros_percent = obter_taxa_juros_bcb()
+        juros_percent = input.juros() if input.fonte_juros() == "Manual" else obter_taxa_juros_bcb()
         i = juros_percent / 100
         n = input.parcelas()
         meses_restantes = input.meses_restantes()
@@ -210,47 +211,38 @@ def server(input, output, session):
     @render.table
     def tabela_comparacao():
         P = input.valor()
-        if input.fonte_juros() == "Manual":
-            juros_percent = input.juros()
-            if juros_percent is None:
-                juros_percent = obter_taxa_juros_bcb()
-        else:
-            juros_percent = obter_taxa_juros_bcb()
+        juros_percent = input.juros() if input.fonte_juros() == "Manual" else obter_taxa_juros_bcb()
         i = juros_percent / 100
         return comparar_custos(P, i)
 
-    @output
-    @render.plot
+    @render_widget
     def grafico_divida():
         df = tabela()
-        if "Erro" in df.columns:
-            return
-        plt.figure(figsize=(8, 4))
-        plt.plot(df["Mês"], df["Dívida Restante (R$)"], marker='o', color='darkred')
-        plt.title("Evolução da Dívida")
-        plt.xlabel("Mês")
-        plt.ylabel("Dívida Restante (R$)")
-        plt.grid(True)
-        plt.tight_layout()
-        return plt.gcf()
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df["Mês"], y=df["Dívida Restante (R$)"], fill='tozeroy', mode='lines+markers',
+            name="Dívida Restante", line=dict(color='indianred')
+        ))
+        fig.update_layout(
+            title="Evolução da Dívida",
+            xaxis_title="Mês",
+            yaxis_title="R$",
+            template='plotly_white',
+            height=400
+        )
+        return fig
 
-    @output
-    @render.plot
+    @render_widget
     def grafico_comparacao():
         P = input.valor()
-        if input.fonte_juros() == "Manual":
-            juros_percent = input.juros()
-            if juros_percent is None:
-                juros_percent = obter_taxa_juros_bcb()
-        else:
-            juros_percent = obter_taxa_juros_bcb()
+        juros_percent = input.juros() if input.fonte_juros() == "Manual" else obter_taxa_juros_bcb()
         i = juros_percent / 100
         prazos = [6, 12, 24, 36]
+        fig = go.Figure()
 
-        plt.figure(figsize=(10, 6))
         for n in prazos:
-            dados = []
             saldo_restante = P
+            saldos = []
             for mes in range(1, n + 1):
                 if i == 0:
                     parcela = P / n
@@ -260,16 +252,21 @@ def server(input, output, session):
                     juros_mes = saldo_restante * i
                     amortizacao = parcela - juros_mes
                     saldo_restante -= amortizacao
-                dados.append(max(0, round(saldo_restante, 2)))
-            plt.plot(range(1, n + 1), dados, marker='o', label=f"{n} parcelas")
+                    saldo = saldo_restante
+                saldos.append(max(0, round(saldo, 2)))
 
-        plt.title("Comparação da Dívida por Prazo")
-        plt.xlabel("Mês")
-        plt.ylabel("Dívida Restante (R$)")
-        plt.grid(True)
-        plt.legend()
-        plt.tight_layout()
-        return plt.gcf()
+            fig.add_trace(go.Scatter(
+                x=list(range(1, n + 1)), y=saldos, mode='lines+markers', name=f"{n} meses"
+            ))
+
+        fig.update_layout(
+            title="Comparativo de Dívida por Prazo",
+            xaxis_title="Mês",
+            yaxis_title="R$",
+            template='plotly_white',
+            height=400
+        )
+        return fig
 
     @output
     @render.download(filename="tabela_parcelas.csv")
@@ -277,10 +274,9 @@ def server(input, output, session):
         df = tabela()
         if "Erro" in df.columns:
             return
-        with io.StringIO() as csv_buffer:
-            df.to_csv(csv_buffer, index=False)
-            return csv_buffer.getvalue()
+        return df.to_csv(index=False)
 
-# Criar e rodar o app
 app = App(app_ui, server)
-app.run(port=8080)
+
+if __name__ == "__main__":
+    app.run(port=8080)
