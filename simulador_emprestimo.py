@@ -104,7 +104,6 @@ app_ui = ui.page_fluid(
             document.body.classList.add("dark");
         });
     """),
-    ui.div(ui.tags.i(class_="fas fa-money-bill-wave fa-3x", title="Logo Empréstimo"), class_="logo"),
     ui.h2("Simulador de Empréstimo com Parcelas", class_="titulo"),
     ui.tags.button("Alternar Tema", class_="toggle-theme", onclick="toggleTheme()"),
     ui.div(
