@@ -5,19 +5,25 @@ body {
     background-color: #121212;
     color: #e0e0e0;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    margin: 20px;
-    padding: 0;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
     transition: background-color 0.4s ease, color 0.4s ease;
 }
 
 /* Container geral */
 .page_fluid {
     max-width: 900px;
+    width: 100%;
     margin: 0 auto;
     padding: 20px 25px;
     border-radius: 12px;
     background-color: #1e1e1e;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.75);
+    text-align: center;
 }
 
 /* Logo topo */
@@ -39,16 +45,19 @@ body {
     letter-spacing: 1px;
 }
 
-/* Form container com grid e espaçamento */
+/* Form container com 2 colunas fixas */
 .form-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 20px;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px 40px;
     margin-bottom: 35px;
+    width: 100%;
+    justify-items: center;
 }
 
 /* Inputs e selects */
 input[type="number"], select {
+    width: 100%;
     padding: 10px 14px;
     border-radius: 8px;
     border: none;
@@ -70,6 +79,7 @@ label {
     display: block;
     font-weight: 600;
     color: #ccc;
+    text-align: left;
 }
 
 /* Botões com ícones */
@@ -86,6 +96,7 @@ label {
     gap: 10px;
     transition: background-color 0.3s ease, transform 0.15s ease;
     box-shadow: 0 3px 10px rgba(240, 165, 0, 0.5);
+    margin: 0 auto;
 }
 .btn-download:hover {
     background-color: #d18e00;
@@ -110,6 +121,7 @@ label {
     font-weight: 600;
     color: #a2d5f2;
     box-shadow: inset 0 0 6px rgba(162, 213, 242, 0.2);
+    text-align: center;
 }
 
 /* Container para tabela e gráfico lado a lado */
@@ -118,6 +130,7 @@ label {
     gap: 28px;
     margin-bottom: 35px;
     flex-wrap: wrap;
+    justify-content: center;
 }
 
 /* Tabela lado esquerdo */
@@ -163,6 +176,9 @@ label {
 
 /* Ajuste responsivo para telas pequenas */
 @media (max-width: 720px) {
+    .form-container {
+        grid-template-columns: 1fr;
+    }
     .output-container {
         flex-direction: column;
     }
@@ -180,7 +196,7 @@ hr {
     margin: 28px 0;
 }
 
-/* Tema claro toggle (aplicável com classe 'light' no body) */
+/* Tema claro toggle */
 body.light {
     background-color: #f5f5f5;
     color: #333333;
